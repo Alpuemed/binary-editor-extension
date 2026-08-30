@@ -1,7 +1,9 @@
 .vscode/**
 .vscode-test/**
+.vscode-test.mjs
 src/**
 media/**/*.ts
+dist/test/**
 esbuild.js
 tsconfig.json
 eslint.config.mjs
@@ -10,3 +12,4 @@ eslint.config.mjs
 **/*.map
 **/.eslintrc.json
 node_modules/**
+CLAUDE.md
