@@ -3,3 +3,7 @@ dist/
 .vscode-test/
 *.vsix
 *.log
+
+# AI agent instruction files
+CLAUDE.md
+AGENTS.md

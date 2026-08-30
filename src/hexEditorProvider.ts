@@ -6,6 +6,9 @@ import { getNonce } from './util';
 export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocument> {
   public static readonly viewType = 'binaryEditor.hexView';
 
+  /** Upper bound on a single insert message from a webview (the UI only ever inserts single bytes). */
+  private static readonly MAX_INSERT_BYTES = 1024;
+
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
     const provider = new HexEditorProvider(context);
     return vscode.window.registerCustomEditorProvider(HexEditorProvider.viewType, provider, {
@@ -49,7 +52,13 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
   ): Promise<void> {
     this.addWebview(document.uri, webviewPanel);
 
-    webviewPanel.webview.options = { enableScripts: true };
+    webviewPanel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, 'dist'),
+        vscode.Uri.joinPath(this.context.extensionUri, 'media'),
+      ],
+    };
     webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
 
     webviewPanel.webview.onDidReceiveMessage((message: WebviewToHostMessage) =>
@@ -67,6 +76,9 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
         this.postUpdate(webviewPanel, document);
         return;
       case 'edit': {
+        if (!this.isValidEdit(message, document.bytes.length)) {
+          return;
+        }
         const edit: ByteEdit = {
           offset: message.offset,
           oldBytes: document.bytes.subarray(message.offset, message.offset + 1),
@@ -76,6 +88,9 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
         return;
       }
       case 'insert': {
+        if (!this.isValidInsert(message, document.bytes.length)) {
+          return;
+        }
         const edit: ByteEdit = {
           offset: message.offset,
           oldBytes: new Uint8Array(0),
@@ -85,6 +100,9 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
         return;
       }
       case 'delete': {
+        if (!this.isValidDelete(message, document.bytes.length)) {
+          return;
+        }
         const edit: ByteEdit = {
           offset: message.offset,
           oldBytes: document.bytes.subarray(message.offset, message.offset + message.length),
@@ -96,11 +114,57 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
     }
   }
 
+  private isValidEdit(message: Extract<WebviewToHostMessage, { type: 'edit' }>, length: number): boolean {
+    if (
+      !Number.isInteger(message.offset) ||
+      message.offset < 0 ||
+      message.offset >= length ||
+      !Number.isInteger(message.newByte) ||
+      message.newByte < 0 ||
+      message.newByte > 0xff
+    ) {
+      console.warn('[hex-editor] Ignoring invalid edit message:', message);
+      return false;
+    }
+    return true;
+  }
+
+  private isValidInsert(message: Extract<WebviewToHostMessage, { type: 'insert' }>, length: number): boolean {
+    if (
+      !Number.isInteger(message.offset) ||
+      message.offset < 0 ||
+      message.offset > length ||
+      !Array.isArray(message.bytes) ||
+      message.bytes.length === 0 ||
+      message.bytes.length > HexEditorProvider.MAX_INSERT_BYTES ||
+      !message.bytes.every((b) => Number.isInteger(b) && b >= 0 && b <= 0xff)
+    ) {
+      console.warn('[hex-editor] Ignoring invalid insert message:', message);
+      return false;
+    }
+    return true;
+  }
+
+  private isValidDelete(message: Extract<WebviewToHostMessage, { type: 'delete' }>, length: number): boolean {
+    if (
+      !Number.isInteger(message.offset) ||
+      message.offset < 0 ||
+      message.offset >= length ||
+      !Number.isInteger(message.length) ||
+      message.length < 1 ||
+      message.offset + message.length > length
+    ) {
+      console.warn('[hex-editor] Ignoring invalid delete message:', message);
+      return false;
+    }
+    return true;
+  }
+
   private postUpdate(panel: vscode.WebviewPanel, document: HexDocument): void {
     const message: HostToWebviewMessage = {
       type: 'update',
       bytes: Array.from(document.bytes),
-      fileName: document.uri.path.split('/').pop() ?? document.uri.toString(),
+      fileName: document.uri.path.split('/').pop() || 'Untitled',
     };
     void panel.webview.postMessage(message);
   }
