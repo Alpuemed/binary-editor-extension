@@ -14,6 +14,7 @@ type Pane = 'hex' | 'ascii';
 
 const vscodeApi = acquireVsCodeApi();
 
+const hexView = document.getElementById('hex-view') as HTMLDivElement;
 const hexScroller = document.getElementById('hex-scroller') as HTMLDivElement;
 const hexSizer = document.getElementById('hex-sizer') as HTMLDivElement;
 const hexRows = document.getElementById('hex-rows') as HTMLDivElement;
@@ -169,6 +170,10 @@ function setCursor(offset: number, pane: Pane): void {
   pendingNibble = null;
   ensureCursorVisible();
   render();
+  // preventDefault() on the mousedown that usually triggers this (to avoid
+  // text-selection drag) also suppresses the browser's default focus
+  // shift, so grab it explicitly or the webview never sees keystrokes.
+  hexView.focus();
 }
 
 function moveCursor(delta: number): void {
@@ -434,4 +439,5 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
 
 buildHeader();
 render();
+hexView.focus();
 vscodeApi.postMessage({ type: 'ready' });

@@ -170,7 +170,7 @@ export class HexEditorProvider implements vscode.CustomEditorProvider<HexDocumen
     <button id="find-next" title="Next match">&darr;</button>
     <span id="status"></span>
   </div>
-  <div id="hex-view">
+  <div id="hex-view" tabindex="0">
     <div id="hex-header"></div>
     <div id="hex-scroller">
       <div id="hex-sizer"></div>
